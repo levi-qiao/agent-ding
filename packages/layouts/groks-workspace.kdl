@@ -1,0 +1,16 @@
+// dual Grok + shell
+layout {
+    tab name="agents" focus=true {
+        pane split_direction="vertical" {
+            pane name="Grok 1" command="grok" close_on_exit=false
+            pane name="Grok 2" command="grok" close_on_exit=false
+        }
+    }
+
+    tab name="shell" {
+        pane split_direction="horizontal" {
+            pane name="Shell" size="70%"
+            pane name="Tests / Logs" size="30%"
+        }
+    }
+}

@@ -1,0 +1,54 @@
+#!/bin/bash
+# Rebuild branded notification apps from brew terminal-notifier + icons.
+set -euo pipefail
+SRC="${TERMINAL_NOTIFIER_APP:-/opt/homebrew/Cellar/terminal-notifier/2.0.0/terminal-notifier.app}"
+ICON_DIR="${AGENT_DING_ICON_DIR:-$HOME/.local/share/agent-ding/icons}"
+APP_DIR="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
+mkdir -p "$APP_DIR"
+
+if [ ! -d "$SRC" ]; then
+  echo "missing terminal-notifier.app at $SRC — brew install terminal-notifier" >&2
+  exit 1
+fi
+
+png_to_icns() {
+  local png="$1" icns="$2" tmp is s
+  tmp="$(mktemp -d)"
+  is="$tmp/AppIcon.iconset"
+  mkdir -p "$is"
+  for s in 16 32 128 256 512; do
+    sips -z "$s" "$s" "$png" --out "$is/icon_${s}x${s}.png" >/dev/null
+    sips -z $((s*2)) $((s*2)) "$png" --out "$is/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$is" -o "$icns"
+  rm -rf "$tmp"
+}
+
+build_app() {
+  local id="$1" display="$2" png="$3"
+  local dest="$APP_DIR/${display}.app" plist
+  [ -f "$png" ] || { echo "missing icon $png" >&2; return 1; }
+  rm -rf "$dest"
+  cp -R "$SRC" "$dest"
+  png_to_icns "$png" "$dest/Contents/Resources/AppIcon.icns"
+  rm -f "$dest/Contents/Resources/Terminal.icns" 2>/dev/null || true
+  plist="$dest/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier local.agentding.$id" "$plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string local.agentding.$id" "$plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName $display" "$plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $display" "$plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $display" "$plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $display" "$plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist"
+  /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$plist"
+  xattr -cr "$dest" 2>/dev/null || true
+  echo "built $dest"
+}
+
+build_app claude Claude "$ICON_DIR/claude.png"
+build_app grok Grok "$ICON_DIR/grok.png"
+build_app agy Agy "$ICON_DIR/agy.png"
+build_app codex Codex "$ICON_DIR/codex.png"
+echo "apps → $APP_DIR"

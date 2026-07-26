@@ -1,0 +1,20 @@
+// agents: Grok / Claude / Agy | shell: cmd + logs
+// command pane: exit stays held; Enter re-runs
+layout {
+    tab name="agents" focus=true {
+        pane split_direction="vertical" {
+            pane name="Grok" command="grok" close_on_exit=false
+            pane name="Claude" command="claude" close_on_exit=false {
+                args "--exclude-dynamic-system-prompt-sections" "--allow-dangerously-skip-permissions"
+            }
+            pane name="Agy" command="agy" close_on_exit=false
+        }
+    }
+
+    tab name="shell" {
+        pane split_direction="horizontal" {
+            pane name="Shell" size="70%"
+            pane name="Tests / Logs" size="30%"
+        }
+    }
+}

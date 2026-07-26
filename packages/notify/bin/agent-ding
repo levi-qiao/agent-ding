@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# agent-ding — desktop "done" toast for coding agents (turn complete only).
+# Two lines: title + body. Branded .app icon on macOS.
+#
+# Usage: agent-ding <client> [message]
+# Clients: claude | grok | agy | codex | <custom>
+set -euo pipefail
+
+CLIENT_RAW="${1:-agent}"
+shift || true
+CUSTOM_MSG="${*:-}"
+CLIENT="$(printf '%s' "$CLIENT_RAW" | tr '[:upper:]' '[:lower:]')"
+
+APP_ROOT="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
+LOCALE="${AGENT_DING_LOCALE:-}"
+# auto-detect zh if unset
+if [ -z "$LOCALE" ]; then
+  case "${LANG:-}${LC_ALL:-}" in
+    zh*|ZH*) LOCALE=zh ;;
+    *) LOCALE=en ;;
+  esac
+fi
+
+if [ "$LOCALE" = "zh" ]; then
+  MSG_DONE="${AGENT_DING_MSG_DONE:-本轮已完成}"
+else
+  MSG_DONE="${AGENT_DING_MSG_DONE:-Done}"
+fi
+
+case "$CLIENT" in
+  claude|claude-code|cc)
+    CLIENT=claude; TITLE="Claude Code"; APP_NAME="Claude"
+    SOUND="${AGENT_DING_SOUND:-Glass}" ;;
+  grok|grok-build|xai)
+    CLIENT=grok; TITLE="Grok"; APP_NAME="Grok"
+    SOUND="${AGENT_DING_SOUND:-Hero}" ;;
+  agy|antigravity|gemini)
+    CLIENT=agy; TITLE="Agy"; APP_NAME="Agy"
+    SOUND="${AGENT_DING_SOUND:-Purr}" ;;
+  codex)
+    CLIENT=codex; TITLE="Codex"; APP_NAME="Codex"
+    SOUND="${AGENT_DING_SOUND:-Submarine}" ;;
+  *)
+    TITLE="$(printf '%s' "$CLIENT_RAW" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+    APP_NAME=""; SOUND="${AGENT_DING_SOUND:-Glass}" ;;
+esac
+
+PROJECT="$(basename "${PWD:-$HOME}")"
+[ "$PROJECT" = "/" ] && PROJECT="Home"
+PROJECT_HASH="$(printf '%s' "${PWD:-}" | shasum -a 1 2>/dev/null | awk '{print $1}' | cut -c1-10)"
+[ -z "$PROJECT_HASH" ] && PROJECT_HASH="default"
+GROUP="agent-ding:${CLIENT}:${PROJECT_HASH}"
+
+if [ -n "$CUSTOM_MSG" ]; then
+  DETAIL="$(printf '%s' "$CUSTOM_MSG" | tr '\n' ' ' | sed 's/  */ /g; s/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ "${#DETAIL}" -gt 100 ] && DETAIL="${DETAIL:0:97}…"
+else
+  DETAIL="$MSG_DONE"
+fi
+BODY="${PROJECT} · ${DETAIL}"
+
+# Activate host terminal (app-level; not exact Zellij pane)
+case "${TERM_PROGRAM:-}" in
+  ghostty) BUNDLE_ID="com.mitchellh.ghostty" ;;
+  iTerm.app) BUNDLE_ID="com.googlecode.iterm2" ;;
+  Apple_Terminal) BUNDLE_ID="com.apple.Terminal" ;;
+  WezTerm) BUNDLE_ID="com.github.wez.wezterm" ;;
+  *) BUNDLE_ID="${AGENT_DING_ACTIVATE:-com.mitchellh.ghostty}" ;;
+esac
+
+NOTIFIER=""
+if [ -n "$APP_NAME" ] && [ -x "$APP_ROOT/${APP_NAME}.app/Contents/MacOS/terminal-notifier" ]; then
+  NOTIFIER="$APP_ROOT/${APP_NAME}.app/Contents/MacOS/terminal-notifier"
+elif [ -x /opt/homebrew/bin/terminal-notifier ]; then
+  NOTIFIER=/opt/homebrew/bin/terminal-notifier
+elif command -v terminal-notifier >/dev/null 2>&1; then
+  NOTIFIER="$(command -v terminal-notifier)"
+fi
+
+if [ -n "$NOTIFIER" ]; then
+  ARGS=(-title "$TITLE" -message "$BODY" -sound "$SOUND" -group "$GROUP")
+  [ -n "$BUNDLE_ID" ] && ARGS+=(-activate "$BUNDLE_ID")
+  "$NOTIFIER" "${ARGS[@]}" >/dev/null 2>&1 || true
+elif command -v notify-send >/dev/null 2>&1; then
+  notify-send "$TITLE" "$BODY" 2>/dev/null || true
+else
+  osascript -e "display notification \"${BODY//\"/\\\"}\" with title \"${TITLE//\"/\\\"}\" sound name \"$SOUND\"" >/dev/null 2>&1 || true
+fi
+
+# Optional Zellij tab mark (requires zellij-attention plugin)
+if [ "${AGENT_DING_ZELLIJ_MARK:-1}" != "0" ] \
+  && [ -n "${ZELLIJ:-}" ] && [ -n "${ZELLIJ_PANE_ID:-}" ] \
+  && command -v zellij >/dev/null 2>&1; then
+  zellij pipe --name "zellij-attention::completed::$ZELLIJ_PANE_ID" >/dev/null 2>&1 || true
+fi
+
+if [ "${AGENT_DING_BELL:-1}" != "0" ]; then
+  { [ -e /dev/tty ] && printf '\a' >/dev/tty || printf '\a'; } 2>/dev/null || true
+fi
+
+exit 0

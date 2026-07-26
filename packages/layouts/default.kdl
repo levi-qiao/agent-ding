@@ -1,0 +1,9 @@
+// Default layout when starting bare `zellij` with this name.
+// New shell panes still benefit from Ghostty command-finish bells.
+// Agents started inside any pane pick up global hooks (Claude/Grok/Codex/Agy)
+// automatically — no layout change required for notifications.
+layout {
+    tab name="main" focus=true {
+        pane
+    }
+}

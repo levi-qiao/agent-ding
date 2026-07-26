@@ -1,0 +1,13 @@
+// Optional: tab ⏳/✅ marks when agent-ding fires
+// Drop into ~/.config/zellij/config.kdl → load_plugins { ... }
+// Requires: https://github.com/KiryuuLight/zellij-attention
+//
+// load_plugins {
+//     "file:~/.config/zellij/plugins/zellij-attention.wasm" {
+//         enabled "true"
+//         waiting_icon "⏳"
+//         completed_icon "✅"
+//     }
+// }
+//
+// visual_bell true

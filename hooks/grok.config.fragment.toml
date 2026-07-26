@@ -1,0 +1,11 @@
+# Append to ~/.grok/config.toml
+[ui.notifications]
+method = "none"
+condition = "always"
+events = ["turn_complete", "task_complete"]
+
+[[ui.notifications.hooks]]
+command = "agent-ding grok \"$GROK_MESSAGE\""
+events = ["turn_complete", "task_complete"]
+only_unfocused = false
+timeout_secs = 10
