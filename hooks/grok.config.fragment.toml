@@ -1,4 +1,4 @@
-# Append to ~/.grok/config.toml
+# Done-only notifications (agent-ding)
 [ui.notifications]
 method = "none"
 condition = "always"

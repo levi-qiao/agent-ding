@@ -1,56 +1,72 @@
 # agent-ding
 
-**Ding when your coding agent finishes** — modular toolkit for multi-agent terminals.
+**Ding when your coding agent finishes.**
 
-macOS desktop toasts with **per-client brand icons**, optional **Zellij layouts**, and shell helpers. Each package installs on its own.
+English-only, **done-only** desktop toasts (not permission spam). Works in **any terminal**; optional Zellij layouts are DIY templates. Modular — install only what you want. Clean uninstall.
 
-```
-agent finishes (Stop / turn_complete)
-        │
-        ▼
-   agent-ding claude|grok|agy|codex
-        │
-        ├── branded macOS toast (2 lines)
-        ├── click → bring terminal app forward
-        └── optional Zellij tab ✅ (zellij-attention)
+```text
+agent turn completes  →  agent-ding claude|grok|agy|codex  →  toast “project · Done”
 ```
 
-## Why
-
-Coding agents often finish while you’re in another window. Terminal OSC notifications break inside multiplexers (Zellij/tmux). **agent-ding** only fires on **turn complete**, not every permission prompt.
-
-## Packages (pick what you need)
-
-| Package | Path | Standalone? | What you get |
-|---------|------|-------------|--------------|
-| **notify** | `packages/notify` | ✅ | `agent-ding` CLI + icon apps |
-| **layouts** | `packages/layouts` | ✅ | Zellij `ai-workspace` / `groks-workspace` |
-| **shell** | `packages/shell` | ✅ | `ai` / `groks` functions |
-| **ghostty** | `packages/ghostty` | ✅ | recommended Ghostty snippet |
-
-Optional third-party: [zellij-attention](https://github.com/KiryuuLight/zellij-attention) for tab marks.
-
-## Quick install
+## For humans
 
 ```bash
 git clone https://github.com/levi-qiao/agent-ding.git
 cd agent-ding
-./install.sh                 # notify + layouts
+./setup.sh          # interview: detects your machine, asks, installs
 # or
-./install.sh --all --with-hooks --with-zellij-attention
+./install.sh        # defaults: notify + sample layouts
+./uninstall.sh      # remove what we installed
+./uninstall.sh --purge
 ```
 
 ```bash
-./install.sh --only notify   # just the ding
-./install.sh --only layouts
-./install.sh --only shell    # prints how to source helpers
+agent-ding claude
+agent-ding grok "fixed the flaky test"
 ```
 
-**macOS deps:** `brew install terminal-notifier` (icons use a branded copy of its `.app`).
+## For coding agents
 
-### Wire agents (done-only)
+Give your agent this URL and ask it to set up agent-ding:
 
-**Claude Code** — `~/.claude/settings.json`:
+**https://github.com/levi-qiao/agent-ding/blob/main/docs/for-agents.md**
+
+The agent should **detect installed tools**, **interview you**, and only configure packages you accept (DIY panes, done-only hooks, no leftover junk).
+
+## What you might already have
+
+agent-ding does **not** force one stack. Multi-support:
+
+| You run… | Role | Install |
+|----------|------|---------|
+| **Any terminal** (Ghostty, iTerm, Terminal.app, WezTerm, kitty, …) | Host UI | Optional; use what you have |
+| **Zellij** (or plain splits) | Multi-agent panes/tabs | Optional |
+| **Claude / Grok / Agy / Codex** | Coding agents | Optional hooks (done-only) |
+| **terminal-notifier** (macOS) | Branded toast icons | `brew install terminal-notifier` |
+
+| Package | Standalone | Purpose |
+|---------|------------|---------|
+| **notify** | ✅ | `agent-ding` CLI + brand icons |
+| **layouts** | ✅ | Sample Zellij KDL (**edit freely** — see [DIY](packages/layouts/DIY.md)) |
+| **shell** | ✅ | Optional `ai` / `groks` helpers |
+| **ghostty** | ✅ | Optional config snippet |
+
+Optional: [zellij-attention](https://github.com/KiryuuLight/zellij-attention) for tab ✅ marks.
+
+## Install options
+
+```bash
+./install.sh --only notify
+./install.sh --only layouts
+./install.sh --all --with-hooks --with-zellij-attention
+./setup.sh                         # recommended interactive path
+```
+
+State is recorded in `~/.local/share/agent-ding/install-state.json` so **uninstall** can reverse bins, layouts, shell markers, snippets, and hooks we added.
+
+## Wire agents (done-only)
+
+**Claude** — `Stop` only:
 
 ```json
 {
@@ -62,78 +78,50 @@ cd agent-ding
 }
 ```
 
-**Grok** — append `hooks/grok.config.fragment.toml` to `~/.grok/config.toml`.
+**Grok** — see `hooks/grok.config.fragment.toml` (`turn_complete` / `task_complete` only).
 
-**Manual test:**
+Keep unrelated hooks (e.g. rtk). Do not enable permission/idle dings unless you choose to.
 
-```bash
-agent-ding claude
-agent-ding grok "fixed the flaky test"
-```
+## DIY panes
 
-## Click-to-focus: what works
+Sample layouts are **templates**, not a product lock-in:
 
-| Level | Status | Notes |
-|-------|--------|--------|
-| Bring **terminal app** forward | ✅ | `-activate` Ghostty / iTerm / Terminal |
-| Exact **Zellij tab/pane** | ⚠️ | Not reliable from notification click; use **zellij-attention** ✅ marks instead |
-| Window-level focus | ⚠️ | OS-dependent |
+- Edit `~/.config/zellij/layouts/*.kdl` or copy from `packages/layouts/`
+- Add/remove agent panes as you like
+- `close_on_exit=false` → pane stays; **Enter** re-runs the command
+- **Notify works without any sample layout** if hooks call `agent-ding`
 
-Honest takeaway: **app focus + tab marks** is the practical combo. Pixel-perfect pane focus usually needs a dedicated plugin stack (e.g. Claude-only tools).
+## Click-to-focus
 
-## Layouts
+| Behavior | Status |
+|----------|--------|
+| Click toast → bring terminal **app** forward | Yes |
+| Click toast → exact Zellij **tab/pane** | Not reliable; use tab ✅ marks instead |
 
-```bash
-# after install + shell helpers
-ai          # Grok | Claude | Agy + shell tab
-groks       # dual Grok + shell
-```
-
-Command panes use Zellij `close_on_exit=false` (Enter re-runs).
-
-## Configuration (env)
+## Env (optional)
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `AGENT_DING_LOCALE` | auto `en`/`zh` | Message language |
-| `AGENT_DING_MSG_DONE` | `Done` / `本轮已完成` | Body when no custom text |
-| `AGENT_DING_SOUND` | per-client | macOS sound name |
+| `AGENT_DING_MSG_DONE` | `Done` | Body when no custom message |
+| `AGENT_DING_SOUND` | per client | macOS sound |
 | `AGENT_DING_ACTIVATE` | from `TERM_PROGRAM` | Bundle id to activate |
 | `AGENT_DING_ZELLIJ_MARK` | `1` | Pipe completed mark |
 | `AGENT_DING_BELL` | `1` | Terminal BEL |
-| `AGENT_DING_APP_DIR` | `~/.local/share/agent-ding/apps` | Brand notifier apps |
 
-## Uninstall
+## Uninstall (no garbage)
 
 ```bash
-rm -f ~/.local/bin/agent-ding*
-rm -rf ~/.local/share/agent-ding
-# remove layouts you copied under ~/.config/zellij/layouts/
-# remove Stop hooks referencing agent-ding
+./uninstall.sh           # reverse tracked install
+./uninstall.sh --dry-run
+./uninstall.sh --purge   # also delete icons/apps data dir
 ```
 
-## Project layout
-
-```
-packages/notify/bin/     # agent-ding, icons, build-apps
-packages/layouts/        # *.kdl + zellij snippet
-packages/shell/          # ai.zsh / ai.bash
-packages/ghostty/        # config.snippet
-hooks/                   # Claude / Grok fragments
-docs/                    # design notes
-install.sh
-```
-
-## Related
-
-- We **do not** ship hellolib agent-notify (too noisy by default).
-- Optional: [zellij-attention](https://github.com/KiryuuLight/zellij-attention)
-- Brand marks for icons: [lobe-icons](https://github.com/lobehub/lobe-icons) + [Antigravity press](https://antigravity.google/press) (trademarks belong to their owners; used for identification only).
+Removes: binaries we installed, layouts we copied, shell/ghostty blocks we marked, zellij-attention wasm if we installed it, Claude/Grok hook fragments we added.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — [LICENSE](./LICENSE). Brand marks used only to identify local notification senders; trademarks remain with their owners.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). Issues and PRs welcome.
+[CONTRIBUTING.md](./CONTRIBUTING.md)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agent-ding — desktop "done" toast for coding agents (turn complete only).
-# Two lines: title + body. Branded .app icon on macOS.
+# English-only messages. Two lines: title + body. Branded .app icon on macOS.
 #
 # Usage: agent-ding <client> [message]
 # Clients: claude | grok | agy | codex | <custom>
@@ -12,20 +12,7 @@ CUSTOM_MSG="${*:-}"
 CLIENT="$(printf '%s' "$CLIENT_RAW" | tr '[:upper:]' '[:lower:]')"
 
 APP_ROOT="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
-LOCALE="${AGENT_DING_LOCALE:-}"
-# auto-detect zh if unset
-if [ -z "$LOCALE" ]; then
-  case "${LANG:-}${LC_ALL:-}" in
-    zh*|ZH*) LOCALE=zh ;;
-    *) LOCALE=en ;;
-  esac
-fi
-
-if [ "$LOCALE" = "zh" ]; then
-  MSG_DONE="${AGENT_DING_MSG_DONE:-本轮已完成}"
-else
-  MSG_DONE="${AGENT_DING_MSG_DONE:-Done}"
-fi
+MSG_DONE="${AGENT_DING_MSG_DONE:-Done}"
 
 case "$CLIENT" in
   claude|claude-code|cc)
@@ -59,12 +46,12 @@ else
 fi
 BODY="${PROJECT} · ${DETAIL}"
 
-# Activate host terminal (app-level; not exact Zellij pane)
 case "${TERM_PROGRAM:-}" in
   ghostty) BUNDLE_ID="com.mitchellh.ghostty" ;;
   iTerm.app) BUNDLE_ID="com.googlecode.iterm2" ;;
   Apple_Terminal) BUNDLE_ID="com.apple.Terminal" ;;
   WezTerm) BUNDLE_ID="com.github.wez.wezterm" ;;
+  kitty) BUNDLE_ID="net.kovidgoyal.kitty" ;;
   *) BUNDLE_ID="${AGENT_DING_ACTIVATE:-com.mitchellh.ghostty}" ;;
 esac
 
@@ -87,7 +74,6 @@ else
   osascript -e "display notification \"${BODY//\"/\\\"}\" with title \"${TITLE//\"/\\\"}\" sound name \"$SOUND\"" >/dev/null 2>&1 || true
 fi
 
-# Optional Zellij tab mark (requires zellij-attention plugin)
 if [ "${AGENT_DING_ZELLIJ_MARK:-1}" != "0" ] \
   && [ -n "${ZELLIJ:-}" ] && [ -n "${ZELLIJ_PANE_ID:-}" ] \
   && command -v zellij >/dev/null 2>&1; then
