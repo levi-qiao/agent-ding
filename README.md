@@ -2,21 +2,37 @@
 
 **Ding when your coding agent finishes.**
 
-English-only, **done-only** desktop toasts (not permission spam). Works in **any terminal**; optional Zellij layouts are DIY templates. Modular — install only what you want. Clean uninstall.
+English-only. **Done-only** (not permission spam). Any terminal. Optional Zellij layouts (DIY). Modular install. Clean uninstall.
 
 ```text
-agent turn completes  →  agent-ding claude|grok|agy|codex  →  toast “project · Done”
+agent turn completes  →  agent-ding  →  "MyProject · Done"
 ```
+
+---
+
+## For coding agents (one URL)
+
+Paste this into any coding agent and ask it to set up agent-ding:
+
+```text
+https://github.com/levi-qiao/agent-ding/blob/main/docs/for-agents.md
+```
+
+Or open the repo — agents should read [`AGENTS.md`](./AGENTS.md) first.
+
+The agent will **interview you**, detect installed tools, install only what you want, wire **done-only** hooks with absolute paths, and leave a clean `./uninstall.sh`.
+
+---
 
 ## For humans
 
 ```bash
 git clone https://github.com/levi-qiao/agent-ding.git
 cd agent-ding
-./setup.sh          # interview: detects your machine, asks, installs
-# or
-./install.sh        # defaults: notify + sample layouts
-./uninstall.sh      # remove what we installed
+./setup.sh                 # interview on a real terminal
+# or non-interactive:
+./install.sh --only notify --with-hooks
+./uninstall.sh
 ./uninstall.sh --purge
 ```
 
@@ -25,102 +41,69 @@ agent-ding claude
 agent-ding grok "fixed the flaky test"
 ```
 
-## For coding agents
+## Multi-support (not one stack)
 
-Give your agent this URL and ask it to set up agent-ding:
+Works with **whatever you already use**:
 
-**https://github.com/levi-qiao/agent-ding/blob/main/docs/for-agents.md**
-
-The agent should **detect installed tools**, **interview you**, and only configure packages you accept (DIY panes, done-only hooks, no leftover junk).
-
-## What you might already have
-
-agent-ding does **not** force one stack. Multi-support:
-
-| You run… | Role | Install |
-|----------|------|---------|
-| **Any terminal** (Ghostty, iTerm, Terminal.app, WezTerm, kitty, …) | Host UI | Optional; use what you have |
-| **Zellij** (or plain splits) | Multi-agent panes/tabs | Optional |
-| **Claude / Grok / Agy / Codex** | Coding agents | Optional hooks (done-only) |
-| **terminal-notifier** (macOS) | Branded toast icons | `brew install terminal-notifier` |
+| Piece | Role | Required? |
+|-------|------|-----------|
+| Ghostty / iTerm / Terminal / WezTerm / kitty / … | Terminal host | Use any |
+| Zellij (or plain splits) | Multi-pane | Optional |
+| Claude / Grok / Agy / Codex | Coding agents | Optional hooks |
+| terminal-notifier (macOS) | Brand toast icons | `brew install terminal-notifier` |
 
 | Package | Standalone | Purpose |
 |---------|------------|---------|
-| **notify** | ✅ | `agent-ding` CLI + brand icons |
-| **layouts** | ✅ | Sample Zellij KDL (**edit freely** — see [DIY](packages/layouts/DIY.md)) |
-| **shell** | ✅ | Optional `ai` / `groks` helpers |
+| **notify** | ✅ | `agent-ding` CLI + icons |
+| **layouts** | ✅ | Sample Zellij KDL — [DIY](packages/layouts/DIY.md) |
+| **shell** | ✅ | Optional `ai` / `groks` |
 | **ghostty** | ✅ | Optional config snippet |
 
-Optional: [zellij-attention](https://github.com/KiryuuLight/zellij-attention) for tab ✅ marks.
+Optional: [zellij-attention](https://github.com/KiryuuLight/zellij-attention) for tab ✅.
 
-## Install options
+## Install flags
 
 ```bash
 ./install.sh --only notify
 ./install.sh --only layouts
-./install.sh --all --with-hooks --with-zellij-attention
-./setup.sh                         # recommended interactive path
+./install.sh --only notify --with-hooks
+./install.sh --only notify --with-zellij-attention
+./install.sh --all
 ```
 
-State is recorded in `~/.local/share/agent-ding/install-state.json` so **uninstall** can reverse bins, layouts, shell markers, snippets, and hooks we added.
+State: `~/.local/share/agent-ding/install-state.json` → used by uninstall.
 
-## Wire agents (done-only)
+## Hooks (done-only)
 
-**Claude** — `Stop` only:
+Prefer **absolute path** (agent hook PATH often lacks `~/.local/bin`):
 
 ```json
-{
-  "hooks": {
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "agent-ding claude" }] }
-    ]
-  }
-}
+"command": "/Users/YOU/.local/bin/agent-ding claude"
 ```
 
-**Grok** — see `hooks/grok.config.fragment.toml` (`turn_complete` / `task_complete` only).
-
-Keep unrelated hooks (e.g. rtk). Do not enable permission/idle dings unless you choose to.
+Claude: `Stop` only. Grok: `turn_complete` / `task_complete` only.  
+`./install.sh --with-hooks` writes absolute paths when configs exist.
 
 ## DIY panes
 
-Sample layouts are **templates**, not a product lock-in:
-
-- Edit `~/.config/zellij/layouts/*.kdl` or copy from `packages/layouts/`
-- Add/remove agent panes as you like
-- `close_on_exit=false` → pane stays; **Enter** re-runs the command
-- **Notify works without any sample layout** if hooks call `agent-ding`
+Sample layouts are templates. Edit freely or skip layouts and only install notify.  
+See [packages/layouts/DIY.md](packages/layouts/DIY.md).
 
 ## Click-to-focus
 
-| Behavior | Status |
-|----------|--------|
-| Click toast → bring terminal **app** forward | Yes |
-| Click toast → exact Zellij **tab/pane** | Not reliable; use tab ✅ marks instead |
+Toast click brings the **terminal app** forward. Exact Zellij pane focus is not reliable; use tab marks if needed.
 
-## Env (optional)
-
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `AGENT_DING_MSG_DONE` | `Done` | Body when no custom message |
-| `AGENT_DING_SOUND` | per client | macOS sound |
-| `AGENT_DING_ACTIVATE` | from `TERM_PROGRAM` | Bundle id to activate |
-| `AGENT_DING_ZELLIJ_MARK` | `1` | Pipe completed mark |
-| `AGENT_DING_BELL` | `1` | Terminal BEL |
-
-## Uninstall (no garbage)
+## Uninstall (no junk)
 
 ```bash
-./uninstall.sh           # reverse tracked install
+./uninstall.sh
 ./uninstall.sh --dry-run
-./uninstall.sh --purge   # also delete icons/apps data dir
+./uninstall.sh --purge
 ```
-
-Removes: binaries we installed, layouts we copied, shell/ghostty blocks we marked, zellij-attention wasm if we installed it, Claude/Grok hook fragments we added.
 
 ## License
 
-MIT — [LICENSE](./LICENSE). Brand marks used only to identify local notification senders; trademarks remain with their owners.
+MIT. Brand marks identify local notification senders only; trademarks stay with their owners.
 
 ## Contributing
 

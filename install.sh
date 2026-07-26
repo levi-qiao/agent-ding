@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Modular installer for agent-ding. Records state for clean uninstall.
 #
-#   ./install.sh                    # notify + layouts
+# Usage:
+#   ./install.sh                         # notify + layouts
 #   ./install.sh --all
 #   ./install.sh --only notify
 #   ./install.sh --only layouts
 #   ./install.sh --only shell
 #   ./install.sh --only ghostty
-#   ./install.sh --with-hooks
-#   ./install.sh --with-zellij-attention
-#   ./install.sh --yes              # non-interactive tips only
+#   ./install.sh --only notify --with-hooks
+#   ./install.sh --only notify --with-zellij-attention
+#   ./setup.sh                           # interactive interview (TTY)
 #
-# Prefer ./setup.sh for an owner interview.
+# Coding agents: read docs/for-agents.md — interview in chat, then this script.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -24,6 +25,7 @@ DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/agent-ding"
 ZELLIJ_LAYOUT_DIR="${ZELLIJ_LAYOUT_DIR:-$HOME/.config/zellij/layouts}"
 ZELLIJ_PLUGIN_DIR="${ZELLIJ_PLUGIN_DIR:-$HOME/.config/zellij/plugins}"
 SHELL_MARKER="# >>> agent-ding shell >>>"
+DING_BIN="$BIN_DIR/agent-ding"
 
 ONLY=""
 WITH_HOOKS=0
@@ -34,7 +36,17 @@ DO_SHELL=0
 DO_GHOSTTY=0
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \?//'
+  cat <<'EOF'
+Usage:
+  ./install.sh                         # notify + layouts
+  ./install.sh --all
+  ./install.sh --only notify|layouts|shell|ghostty
+  ./install.sh --only notify --with-hooks
+  ./install.sh --only notify --with-zellij-attention
+  ./setup.sh                           # interactive interview
+
+Coding agents: https://github.com/levi-qiao/agent-ding/blob/main/docs/for-agents.md
+EOF
   exit 0
 }
 
@@ -48,24 +60,60 @@ while [ $# -gt 0 ]; do
         layouts) DO_LAYOUTS=1 ;;
         shell) DO_SHELL=1 ;;
         ghostty) DO_GHOSTTY=1 ;;
-        *) echo "unknown package: ${2:-}" >&2; exit 2 ;;
+        *) echo "unknown package: ${2:-} (notify|layouts|shell|ghostty)" >&2; exit 2 ;;
       esac
       shift 2
       ;;
     --with-hooks) WITH_HOOKS=1; shift ;;
     --with-zellij-attention) WITH_ZA=1; shift ;;
-    --yes) shift ;; # reserved for CI
+    --yes) shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
 if [ "$DO_NOTIFY$DO_LAYOUTS$DO_SHELL$DO_GHOSTTY" = "0000" ]; then
-  DO_NOTIFY=1
-  DO_LAYOUTS=1
+  if [ "$WITH_HOOKS" = 1 ] || [ "$WITH_ZA" = 1 ]; then
+    # allow flags-only on top of existing install
+    :
+  else
+    DO_NOTIFY=1
+    DO_LAYOUTS=1
+  fi
 fi
 
 log() { printf '→ %s\n' "$*"; }
 state_init
+
+find_tn_app() {
+  if [ -n "${TERMINAL_NOTIFIER_APP:-}" ] && [ -d "$TERMINAL_NOTIFIER_APP" ]; then
+    echo "$TERMINAL_NOTIFIER_APP"
+    return
+  fi
+  local c
+  c="$(command -v terminal-notifier 2>/dev/null || true)"
+  if [ -n "$c" ]; then
+    # Homebrew: bin is a symlink into the .app
+    local real
+    real="$(readlink "$c" 2>/dev/null || true)"
+    if [ -n "$real" ]; then
+      case "$real" in
+        /*) ;;
+        *) real="$(cd "$(dirname "$c")" && cd "$(dirname "$real")" && pwd)/$(basename "$real")" ;;
+      esac
+      if [[ "$real" == *".app/"* ]]; then
+        echo "${real%%.app/*}.app"
+        return
+      fi
+    fi
+  fi
+  local d
+  for d in /opt/homebrew/Cellar/terminal-notifier/*/terminal-notifier.app \
+           /usr/local/Cellar/terminal-notifier/*/terminal-notifier.app; do
+    # shellcheck disable=SC2086
+    if [ -d $d ]; then echo $d; return; fi
+  done
+  return 1
+}
 
 if [ "$DO_NOTIFY" = 1 ]; then
   log "install notify → $BIN_DIR"
@@ -75,18 +123,24 @@ if [ "$DO_NOTIFY" = 1 ]; then
     state_add bins "$BIN_DIR/$b"
   done
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    if [ ! -d /opt/homebrew/Cellar/terminal-notifier ] && ! command -v terminal-notifier >/dev/null 2>&1; then
+    if ! find_tn_app >/dev/null 2>&1; then
       if command -v brew >/dev/null 2>&1; then
         log "brew install terminal-notifier"
         brew install terminal-notifier || log "warn: brew install failed"
       else
-        log "warn: install terminal-notifier for branded icons"
+        log "warn: install terminal-notifier for branded icons (brew install terminal-notifier)"
       fi
+    fi
+    TN_APP="$(find_tn_app || true)"
+    if [ -n "$TN_APP" ]; then
+      export TERMINAL_NOTIFIER_APP="$TN_APP"
     fi
     log "build brand icons + apps"
     "$BIN_DIR/agent-ding-icons" || log "warn: icons failed (network?)"
     "$BIN_DIR/agent-ding-build-apps" || log "warn: app build failed"
     state_add markers "data_dir:$DATA_DIR"
+  else
+    log "non-macOS: notify-send / fallback (no brand .app)"
   fi
 fi
 
@@ -100,8 +154,10 @@ if [ "$DO_LAYOUTS" = 1 ]; then
     install -m 644 "$src" "$dst"
     state_add layouts "$dst"
   done
-  install -m 644 "$ROOT/packages/layouts/DIY.md" "$ZELLIJ_LAYOUT_DIR/agent-ding-DIY.md" 2>/dev/null || true
-  state_add files "$ZELLIJ_LAYOUT_DIR/agent-ding-DIY.md"
+  if [ -f "$ROOT/packages/layouts/DIY.md" ]; then
+    install -m 644 "$ROOT/packages/layouts/DIY.md" "$ZELLIJ_LAYOUT_DIR/agent-ding-DIY.md"
+    state_add files "$ZELLIJ_LAYOUT_DIR/agent-ding-DIY.md"
+  fi
 fi
 
 if [ "$DO_SHELL" = 1 ]; then
@@ -118,6 +174,7 @@ if [ "$DO_SHELL" = 1 ]; then
     if [ -f "$RC" ] && grep -qF "$SHELL_MARKER" "$RC" 2>/dev/null; then
       log "shell helpers already sourced in $RC"
     else
+      touch "$RC"
       {
         echo ""
         echo "$SHELL_MARKER"
@@ -137,6 +194,7 @@ if [ "$DO_GHOSTTY" = 1 ] && [[ "$(uname -s)" == "Darwin" ]]; then
   if [ -f "$GHOSTTY_CFG" ] && grep -qF "$MARKER" "$GHOSTTY_CFG" 2>/dev/null; then
     log "ghostty snippet already present"
   else
+    touch "$GHOSTTY_CFG"
     {
       echo ""
       echo "$MARKER"
@@ -160,7 +218,6 @@ if [ "$WITH_ZA" = 1 ]; then
   if [ -f "$ZCFG" ] && grep -qF "$ZA_MARK" "$ZCFG" 2>/dev/null; then
     log "zellij-attention load_plugins already marked"
   elif [ -f "$ZCFG" ]; then
-    # Best-effort: append load_plugins block if none; else print instructions
     if ! grep -q 'load_plugins' "$ZCFG"; then
       {
         echo ""
@@ -179,18 +236,31 @@ KDL
       state_add markers "zellij_cfg:$ZCFG"
       log "appended load_plugins → $ZCFG"
     else
-      log "add load_plugins entry manually (see packages/layouts/zellij-config.snippet.kdl)"
+      log "NOTE: add zellij-attention to existing load_plugins (see packages/layouts/zellij-config.snippet.kdl)"
       state_add markers "zellij_cfg_manual:$ZCFG"
     fi
+  else
+    log "NOTE: no ~/.config/zellij/config.kdl yet — plugin wasm installed; add load_plugins when you create config"
   fi
 fi
 
 if [ "$WITH_HOOKS" = 1 ]; then
-  log "merge done-only agent hooks"
-  python3 - "$ROOT" <<'PY'
-import json, re, sys
+  if [ ! -x "$DING_BIN" ]; then
+    log "hooks need notify first — installing notify"
+    DO_NOTIFY=1
+    # recurse only notify bits: install bins if missing
+    mkdir -p "$BIN_DIR" "$DATA_DIR"
+    for b in agent-ding agent-ding-icons agent-ding-build-apps; do
+      install -m 755 "$ROOT/packages/notify/bin/$b" "$BIN_DIR/$b"
+      state_add bins "$BIN_DIR/$b"
+    done
+  fi
+  log "merge done-only hooks (absolute path: $DING_BIN)"
+  DING_BIN="$DING_BIN" python3 - <<'PY'
+import json, os
 from pathlib import Path
-root = Path(sys.argv[1])
+
+ding = os.environ["DING_BIN"]
 state_path = Path.home() / ".local/share/agent-ding/install-state.json"
 
 def load_state():
@@ -216,37 +286,54 @@ if cp.exists():
         if "agent-ding" in cmds or "handle-claude-hook" in cmds:
             continue
         new_stop.append(e)
-    entry = {"hooks": [{"type": "command", "command": "agent-ding claude"}]}
-    new_stop.append(entry)
+    cmd = f"{ding} claude"
+    new_stop.append({"hooks": [{"type": "command", "command": cmd}]})
     hooks["Stop"] = new_stop
     data["hooks"] = hooks
     cp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-    tag = "claude:Stop:agent-ding claude"
+    tag = f"claude:Stop:{cmd}"
     if tag not in hooks_log:
         hooks_log.append(tag)
-    print("Claude Stop → agent-ding claude")
+    print(f"Claude Stop → {cmd}")
 else:
     print("skip Claude (no ~/.claude/settings.json)")
 
 # Grok
 gp = Path.home() / ".grok/config.toml"
-frag = (root / "hooks/grok.config.fragment.toml").read_text()
 mark = "# >>> agent-ding grok >>>"
+end = "# <<< agent-ding grok <<<"
+frag = f'''{mark}
+[ui.notifications]
+method = "none"
+condition = "always"
+events = ["turn_complete", "task_complete"]
+
+[[ui.notifications.hooks]]
+command = "{ding} grok \\"$GROK_MESSAGE\\""
+events = ["turn_complete", "task_complete"]
+only_unfocused = false
+timeout_secs = 10
+{end}
+'''
 if gp.exists():
     text = gp.read_text()
     if mark in text:
-        print("Grok fragment already present")
+        # refresh block with absolute path
+        import re
+        text2 = re.sub(
+            r"# >>> agent-ding grok >>>.*?# <<< agent-ding grok <<<\n?",
+            frag + "\n",
+            text,
+            flags=re.S,
+        )
+        gp.write_text(text2)
+        print(f"Grok hooks refreshed → {ding}")
     else:
-        # strip old diy notification blocks that call agent-ding
-        if "agent-ding grok" in text and mark not in text:
-            # leave as-is if user already has working block
-            print("Grok already references agent-ding (manual)")
-        else:
-            gp.write_text(text.rstrip() + "\n\n" + mark + "\n" + frag + "\n# <<< agent-ding grok <<<\n")
-            tag = "grok:config:agent-ding"
-            if tag not in hooks_log:
-                hooks_log.append(tag)
-            print("appended Grok turn_complete hook")
+        gp.write_text(text.rstrip() + "\n\n" + frag + "\n")
+        print(f"Grok hooks appended → {ding}")
+    tag = "grok:config:agent-ding"
+    if tag not in hooks_log:
+        hooks_log.append(tag)
 else:
     print("skip Grok (no ~/.grok/config.toml)")
 
@@ -258,7 +345,6 @@ fi
 state_add markers "repo:$ROOT"
 log "done. state → $STATE_FILE"
 echo ""
-echo "Test:     agent-ding claude"
+echo "Test:      $DING_BIN claude"
 echo "Uninstall: $ROOT/uninstall.sh"
-echo "Interview: $ROOT/setup.sh"
 echo "Agents:    https://github.com/levi-qiao/agent-ding/blob/main/docs/for-agents.md"

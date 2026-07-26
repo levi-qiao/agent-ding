@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-ding claude"
+            "command": "REPLACE_WITH_ABSOLUTE_PATH/agent-ding claude"
           }
         ]
       }

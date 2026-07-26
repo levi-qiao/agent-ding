@@ -1,11 +1,12 @@
 # Done-only notifications (agent-ding)
+# Replace REPLACE_WITH_ABSOLUTE_PATH with e.g. /Users/you/.local/bin
 [ui.notifications]
 method = "none"
 condition = "always"
 events = ["turn_complete", "task_complete"]
 
 [[ui.notifications.hooks]]
-command = "agent-ding grok \"$GROK_MESSAGE\""
+command = "REPLACE_WITH_ABSOLUTE_PATH/agent-ding grok \"$GROK_MESSAGE\""
 events = ["turn_complete", "task_complete"]
 only_unfocused = false
 timeout_secs = 10

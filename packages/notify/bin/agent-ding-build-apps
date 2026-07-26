@@ -1,13 +1,19 @@
 #!/bin/bash
 # Rebuild branded notification apps from brew terminal-notifier + icons.
 set -euo pipefail
-SRC="${TERMINAL_NOTIFIER_APP:-/opt/homebrew/Cellar/terminal-notifier/2.0.0/terminal-notifier.app}"
 ICON_DIR="${AGENT_DING_ICON_DIR:-$HOME/.local/share/agent-ding/icons}"
 APP_DIR="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
 mkdir -p "$APP_DIR"
 
-if [ ! -d "$SRC" ]; then
-  echo "missing terminal-notifier.app at $SRC — brew install terminal-notifier" >&2
+if [ -z "${TERMINAL_NOTIFIER_APP:-}" ] || [ ! -d "${TERMINAL_NOTIFIER_APP:-}" ]; then
+  for d in /opt/homebrew/Cellar/terminal-notifier/*/terminal-notifier.app \
+           /usr/local/Cellar/terminal-notifier/*/terminal-notifier.app; do
+    if [ -d "$d" ]; then TERMINAL_NOTIFIER_APP="$d"; break; fi
+  done
+fi
+SRC="${TERMINAL_NOTIFIER_APP:-}"
+if [ -z "$SRC" ] || [ ! -d "$SRC" ]; then
+  echo "missing terminal-notifier.app — brew install terminal-notifier" >&2
   exit 1
 fi
 
