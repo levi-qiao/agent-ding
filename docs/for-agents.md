@@ -110,19 +110,33 @@ Let `DING="$HOME/.local/bin/agent-ding"`.
 
 `--with-hooks` does this merge for Claude when settings exist; **verify** the written command is absolute or that `~/.local/bin` is on the hook PATH. Prefer absolute.
 
-### Grok (`~/.grok/config.toml`)
+### Grok (`~/.grok/hooks/agent-ding.json`)
 
-Use fragment `hooks/grok.config.fragment.toml` but set:
+**Primary (reliable):** lifecycle `Stop` — same idea as Claude. Fragment: `hooks/grok.hooks.json`.
 
-```toml
-command = "/Users/YOU/.local/bin/agent-ding grok \"$GROK_MESSAGE\""
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "/Users/YOU/.local/bin/agent-ding grok"
+      }]
+    }]
+  }
+}
 ```
 
-Only `turn_complete` / `task_complete`.
+`--with-hooks` writes this file when `~/.grok` exists.
+
+**Do not** set `[ui.notifications] method = "none"` expecting hooks still to run — on Grok Build 0.2.x that **disables the whole notification pipeline** (including `[[ui.notifications.hooks]]`). Optional secondary fragment `hooks/grok.config.fragment.toml` uses `method = "auto"` only if the owner wants `$GROK_MESSAGE` toasts *in addition* to Stop (may double-ding).
 
 ### Agy / Codex
 
-Only if owner asked. Codex **desktop** often has its own notifications — do not fight it unless they want CLI dings.
+Only if owner asked.
+
+- **Codex:** often already has `notify = [..., "turn-ended"]` (desktop app). Do **not** replace it with agent-ding unless the owner wants the brand toast *instead of* Codex’s own.
+- **Agy / Antigravity CLI:** no stable done-hook surface in settings today — install bins/icons only; owner can call `agent-ding agy` manually or when Agy adds hooks.
 
 ## Step 5 — verify
 
@@ -166,8 +180,10 @@ If no toast on macOS: System Settings → Notifications → allow the brand apps
 
 | Symptom | Fix |
 |---------|-----|
-| Hook runs but no toast | Absolute path to `agent-ding`; macOS notification permission |
+| Hook runs but no toast | Absolute path to `agent-ding`; macOS notification permission for brand apps |
 | `agent-ding: command not found` in hook | Use full path in hook command |
+| Grok turn ends, no ding | Prefer `~/.grok/hooks/agent-ding.json` **Stop** (not only `ui.notifications`). Restart Grok after install. Avoid `method = "none"` |
+| Grok dings as Claude Code | `agent-ding claude` no-ops on Grok host; ensure separate `agent-ding grok` Stop/notify. Or turn off `compat.claude.hooks` if owner accepts |
 | Icons look like Terminal | Run `agent-ding-icons && agent-ding-build-apps` on macOS |
 | Layout not applied | New Zellij session after copying layouts; or DIY |
 | Uninstall left stuff | Was installed without `./install.sh` — use `--purge` + manual hook edit |
@@ -179,14 +195,10 @@ If no toast on macOS: System Settings → Notifications → allow the brand apps
 
 ## Grok + Claude hook compatibility
 
-Grok sets `[compat.claude] hooks = true` by default and **loads `~/.claude/settings.json` hooks**.
+Grok may set `[compat.claude] hooks = true` and **load `~/.claude/settings.json` hooks**.
 
 If Claude has `Stop → agent-ding claude`, Grok turns would incorrectly ding as Claude Code.
 
-**agent-ding mitigates this:** when `client=claude` but the host looks like Grok (`GROK_*` env / parent process), it **no-ops**. Grok should still have its own:
+**agent-ding mitigates this:** when `client=claude` but the host looks like Grok (`GROK_*` env / parent process), it **no-ops**. Always install a **Grok-native** Stop (or notify) → `agent-ding grok`.
 
-```toml
-command = "/ABS/PATH/agent-ding grok \"$GROK_MESSAGE\""
-```
-
-Do not remove `compat.claude.hooks` solely for this unless the owner wants that — they may rely on Claude PreToolUse hooks (e.g. rtk) inside Grok.
+Do not remove `compat.claude.hooks` solely for this unless the owner wants that — they may rely on Claude PreToolUse hooks (e.g. rtk) inside Grok. Prefer installing Grok’s own rtk/agent-ding under `~/.grok/hooks/` when compat is off.

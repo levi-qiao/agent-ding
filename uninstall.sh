@@ -180,7 +180,13 @@ p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 print("removed Claude agent-ding Stop hooks")
 PY
       ;;
-    grok:*)
+    grok:hooks:*|grok:config:*)
+      # Remove lifecycle hook file and/or legacy config markers
+      GH="$HOME/.grok/hooks/agent-ding.json"
+      if [ -f "$GH" ]; then
+        run "rm -f \"$GH\""
+        log "removed $GH"
+      fi
       GP="$HOME/.grok/config.toml"
       if [ -f "$GP" ]; then
         python3 - "$GP" <<'PY'
@@ -194,9 +200,28 @@ text2 = re.sub(
     text,
     flags=re.S,
 )
-# also strip loose agent-ding notification block if marked
 p.write_text(text2)
-print("stripped Grok agent-ding block")
+print("stripped Grok agent-ding config markers (if any)")
+PY
+      fi
+      ;;
+    grok:*)
+      # backward-compat for older install-state tags
+      GH="$HOME/.grok/hooks/agent-ding.json"
+      [ -f "$GH" ] && run "rm -f \"$GH\""
+      GP="$HOME/.grok/config.toml"
+      if [ -f "$GP" ]; then
+        python3 - "$GP" <<'PY'
+import re, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    text = p.read_text()
+    p.write_text(re.sub(
+        r"\n?# >>> agent-ding grok >>>.*?# <<< agent-ding grok <<<\n?",
+        "\n", text, flags=re.S,
+    ))
+print("stripped Grok agent-ding (legacy tag)")
 PY
       fi
       ;;

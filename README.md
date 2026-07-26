@@ -75,8 +75,7 @@ State: `~/.local/share/agent-ding/install-state.json` → used by uninstall.
 
 ## Hooks (done-only)
 
-> **Grok users:** Grok can load Claude's hooks (`compat.claude.hooks`). `agent-ding claude` auto-skips when the host is Grok so you don't get a Claude-branded ding. Keep a separate Grok `turn_complete` hook → `agent-ding grok`.
-
+> **Grok users:** Grok can load Claude's hooks (`compat.claude.hooks`). `agent-ding claude` auto-skips when the host is Grok so you don't get a Claude-branded ding. Install a **Grok-native** Stop → `agent-ding grok` under `~/.grok/hooks/`.
 
 Prefer **absolute path** (agent hook PATH often lacks `~/.local/bin`):
 
@@ -84,8 +83,14 @@ Prefer **absolute path** (agent hook PATH often lacks `~/.local/bin`):
 "command": "/Users/YOU/.local/bin/agent-ding claude"
 ```
 
-Claude: `Stop` only. Grok: `turn_complete` / `task_complete` only.  
-`./install.sh --with-hooks` writes absolute paths when configs exist.
+| Agent | Done trigger | Where |
+|-------|--------------|--------|
+| Claude | `Stop` | `~/.claude/settings.json` |
+| Grok | `Stop` (primary) | `~/.grok/hooks/agent-ding.json` |
+| Codex | often built-in `notify` | leave alone unless owner wants agent-ding |
+| Agy | no stable hook yet | icons only |
+
+`./install.sh --with-hooks` writes absolute paths when Claude/Grok configs exist.
 
 ## DIY panes
 

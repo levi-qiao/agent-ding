@@ -298,44 +298,64 @@ if cp.exists():
 else:
     print("skip Claude (no ~/.claude/settings.json)")
 
-# Grok
-gp = Path.home() / ".grok/config.toml"
-mark = "# >>> agent-ding grok >>>"
-end = "# <<< agent-ding grok <<<"
-frag = f'''{mark}
-[ui.notifications]
-method = "none"
-condition = "always"
-events = ["turn_complete", "task_complete"]
-
-[[ui.notifications.hooks]]
-command = "{ding} grok \\"$GROK_MESSAGE\\""
-events = ["turn_complete", "task_complete"]
-only_unfocused = false
-timeout_secs = 10
-{end}
-'''
-if gp.exists():
-    text = gp.read_text()
-    if mark in text:
-        # refresh block with absolute path
-        import re
-        text2 = re.sub(
-            r"# >>> agent-ding grok >>>.*?# <<< agent-ding grok <<<\n?",
-            frag + "\n",
-            text,
-            flags=re.S,
+# Grok — primary: lifecycle Stop in ~/.grok/hooks/ (same idea as Claude Stop).
+# Do not rely on [ui.notifications] method="none": Grok 0.2.x treats that as
+# turning notifications (and their hooks) off entirely.
+gh_dir = Path.home() / ".grok" / "hooks"
+if (Path.home() / ".grok").is_dir() or gh_dir.parent.exists():
+    gh_dir.mkdir(parents=True, exist_ok=True)
+    gh = gh_dir / "agent-ding.json"
+    gh.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "Stop": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": f"{ding} grok",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            indent=2,
         )
-        gp.write_text(text2)
-        print(f"Grok hooks refreshed → {ding}")
-    else:
-        gp.write_text(text.rstrip() + "\n\n" + frag + "\n")
-        print(f"Grok hooks appended → {ding}")
-    tag = "grok:config:agent-ding"
+        + "\n"
+    )
+    # stable tag (path is always ~/.grok/hooks/agent-ding.json)
+    tag = "grok:hooks:agent-ding.json:Stop"
+    # drop legacy tags from older installs
+    hooks_log[:] = [
+        h
+        for h in hooks_log
+        if h not in ("grok:config:agent-ding",)
+        and not h.startswith("grok:hooks:/")
+    ]
     if tag not in hooks_log:
         hooks_log.append(tag)
+    print(f"Grok Stop → {ding} grok  ({gh})")
+
+    # Strip legacy broken [ui.notifications] block (method=none) if present
+    gp = Path.home() / ".grok" / "config.toml"
+    mark = "# >>> agent-ding grok >>>"
+    if gp.exists():
+        import re
+
+        text = gp.read_text()
+        if mark in text:
+            text2 = re.sub(
+                r"\n?# >>> agent-ding grok >>>.*?# <<< agent-ding grok <<<\n?",
+                "\n",
+                text,
+                flags=re.S,
+            )
+            gp.write_text(text2)
+            print("stripped legacy Grok ui.notifications agent-ding block")
 else:
-    print("skip Grok (no ~/.grok/config.toml)")
+    print("skip Grok (no ~/.grok)")
 
 st["hooks"] = hooks_log
 save_state(st)

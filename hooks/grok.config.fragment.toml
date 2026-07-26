@@ -1,7 +1,14 @@
-# Done-only notifications (agent-ding)
+# Optional secondary path (desktop toast via notification hooks).
+# Primary Grok wiring is ~/.grok/hooks/agent-ding.json (Stop) — see install.sh.
+#
+# Do NOT set method = "none": on Grok Build 0.2.x that disables the whole
+# notification pipeline (including hooks), so turn_complete never fires.
+# Prefer the Stop lifecycle hook for reliability; keep this only if you want
+# $GROK_MESSAGE in the toast body and accept a possible second ding.
+#
 # Replace REPLACE_WITH_ABSOLUTE_PATH with e.g. /Users/you/.local/bin
 [ui.notifications]
-method = "none"
+method = "auto"
 condition = "always"
 events = ["turn_complete", "task_complete"]
 
