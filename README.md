@@ -75,7 +75,7 @@ State: `~/.local/share/agent-ding/install-state.json` → used by uninstall.
 
 ## Hooks (done-only)
 
-> **Grok users:** Grok can load Claude's hooks (`compat.claude.hooks`). `agent-ding claude` auto-skips when the host is Grok so you don't get a Claude-branded ding. Install a **Grok-native** Stop → `agent-ding grok` under `~/.grok/hooks/`.
+> **Grok users:** Grok can load Claude's hooks (`compat.claude.hooks`). `agent-ding` **detects the host** (`GROK_AGENT`, hook env, process tree) and **remaps a wrong `claude` arg to Grok** so you never get a Claude Code toast inside Grok. Still install a **Grok-native** Stop → `agent-ding grok` under `~/.grok/hooks/` (preferred).
 
 Prefer **absolute path** (agent hook PATH often lacks `~/.local/bin`):
 

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] — 2026-07-26
+
+### Fixed
+
+- **Wrong brand on Grok:** host detection now reads `GROK_AGENT`, `GROK_WORKSPACE_ROOT`, `GROK_HOOK_*`, and walks up to 12 parent processes. If the hook arg says `claude` but the host is Grok, remap to **Grok** (no more Claude Code toast inside Grok). Reverse remap for Claude host + `grok` arg.
+- **Double icon on macOS:** stop passing `-contentImage` / redundant `-appIcon` when `-sender` is set (right-side duplicate tile).
+- Collapse double-fire (Claude-compat Stop + Grok Stop) via a shared notification `-group` per project.
+
 ## [0.1.1] — 2026-07-26
 
 ### Fixed

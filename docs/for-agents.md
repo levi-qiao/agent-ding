@@ -183,7 +183,7 @@ If no toast on macOS: System Settings → Notifications → allow the brand apps
 | Hook runs but no toast | Absolute path to `agent-ding`; macOS notification permission for brand apps |
 | `agent-ding: command not found` in hook | Use full path in hook command |
 | Grok turn ends, no ding | Prefer `~/.grok/hooks/agent-ding.json` **Stop** (not only `ui.notifications`). Restart Grok after install. Avoid `method = "none"` |
-| Grok dings as Claude Code | `agent-ding claude` no-ops on Grok host; ensure separate `agent-ding grok` Stop/notify. Or turn off `compat.claude.hooks` if owner accepts |
+| Grok dings as Claude Code | Fixed in ≥0.1.2: host remap (`GROK_AGENT` / hook env / PPID). Ensure `~/.grok/hooks/agent-ding.json` Stop → `agent-ding grok`. Prefer `compat.claude.hooks = false` |
 | Icons look like Terminal | Run `agent-ding-icons && agent-ding-build-apps` on macOS |
 | Layout not applied | New Zellij session after copying layouts; or DIY |
 | Uninstall left stuff | Was installed without `./install.sh` — use `--purge` + manual hook edit |
@@ -199,6 +199,6 @@ Grok may set `[compat.claude] hooks = true` and **load `~/.claude/settings.json`
 
 If Claude has `Stop → agent-ding claude`, Grok turns would incorrectly ding as Claude Code.
 
-**agent-ding mitigates this:** when `client=claude` but the host looks like Grok (`GROK_*` env / parent process), it **no-ops**. Always install a **Grok-native** Stop (or notify) → `agent-ding grok`.
+**agent-ding mitigates this:** when `client=claude` but the host looks like Grok (`GROK_AGENT`, `GROK_HOOK_*`, `GROK_SESSION_ID`, parent process tree), it **remaps to Grok** and uses the Grok brand app / title. Always still install a **Grok-native** Stop → `agent-ding grok`. A shared notification group collapses double-fire into one toast.
 
 Do not remove `compat.claude.hooks` solely for this unless the owner wants that — they may rely on Claude PreToolUse hooks (e.g. rtk) inside Grok. Prefer installing Grok’s own rtk/agent-ding under `~/.grok/hooks/` when compat is off.

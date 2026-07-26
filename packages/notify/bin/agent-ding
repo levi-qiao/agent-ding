@@ -14,38 +14,83 @@ CLIENT="$(printf '%s' "$CLIENT_RAW" | tr '[:upper:]' '[:lower:]')"
 APP_ROOT="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
 ICON_DIR="${AGENT_DING_ICON_DIR:-$HOME/.local/share/agent-ding/icons}"
 MSG_DONE="${AGENT_DING_MSG_DONE:-Done}"
+DEBUG_LOG="${AGENT_DING_DEBUG_LOG:-$HOME/.local/share/agent-ding/debug.log}"
 
-# Grok Build imports ~/.claude/settings.json hooks when compat.claude.hooks=true.
-# That would fire "agent-ding claude" on Grok turns — skip wrong brand.
-is_grok_host() {
-  [ -n "${GROK_SESSION_ID:-}" ] && return 0
-  [ -n "${GROK_SESSION:-}" ] && return 0
-  [ -n "${GROK_HOOK_EVENT:-}" ] && return 0
-  [ -n "${GROK_HOME:-}" ] && return 0
-  # Parent process heuristic (hook subprocess)
-  local p comm
-  p="${PPID:-0}"
-  comm="$(ps -p "$p" -o comm= 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
-  case "$comm" in
-    *grok*) return 0 ;;
-  esac
-  # Walk one more level
-  local pp
-  pp="$(ps -p "$p" -o ppid= 2>/dev/null | tr -d ' ' || true)"
-  if [ -n "$pp" ] && [ "$pp" != "0" ]; then
-    comm="$(ps -p "$pp" -o comm= 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
-    case "$comm" in
-      *grok*) return 0 ;;
+debug() {
+  [ "${AGENT_DING_DEBUG:-0}" = "1" ] || return 0
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$DEBUG_LOG" 2>/dev/null || true
+}
+
+# Detect which agent host is running this process (hook / tool shell / TUI).
+# Grok sets GROK_AGENT=1 on tool shells; Stop hooks also set GROK_HOOK_EVENT,
+# GROK_SESSION_ID, GROK_WORKSPACE_ROOT. Claude Code sets CLAUDE_CODE_* vars.
+# Walk PPID so nested zsh→bash→grok still matches.
+ancestor_is() {
+  local needle="$1" p="${PPID:-0}" i=0 comm args
+  needle="$(printf '%s' "$needle" | tr '[:upper:]' '[:lower:]')"
+  while [ -n "$p" ] && [ "$p" != "0" ] && [ "$i" -lt 12 ]; do
+    comm="$(ps -p "$p" -o comm= 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d ' ' || true)"
+    args="$(ps -p "$p" -o args= 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+    case "$comm $args" in
+      *"$needle"*) return 0 ;;
     esac
-  fi
+    p="$(ps -p "$p" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+    i=$((i + 1))
+  done
   return 1
 }
 
-if [ "$CLIENT" = "claude" ] || [ "$CLIENT" = "claude-code" ] || [ "$CLIENT" = "cc" ]; then
-  if is_grok_host; then
-    # Wrong brand would show; Grok has its own turn_complete → agent-ding grok
-    exit 0
+detect_host() {
+  # Explicit env from Grok hooks / tool runner (preferred)
+  if [ -n "${GROK_HOOK_EVENT:-}" ] || [ -n "${GROK_SESSION_ID:-}" ] \
+    || [ -n "${GROK_SESSION:-}" ] || [ -n "${GROK_WORKSPACE_ROOT:-}" ] \
+    || [ -n "${GROK_HOME:-}" ] || [ -n "${GROK_AGENT:-}" ] \
+    || [ -n "${GROK_HOOK_NAME:-}" ]; then
+    printf '%s' "grok"
+    return
   fi
+  # Claude Code hook / session env
+  if [ -n "${CLAUDE_CODE_ENTRYPOINT:-}" ] || [ -n "${CLAUDE_CODE_SESSION:-}" ] \
+    || [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_SESSION_ID:-}" ] \
+    || [ -n "${CLAUDE_CODE_SSE_PORT:-}" ]; then
+    # Grok also sets CLAUDE_PROJECT_DIR as a Claude-compat alias — do not
+    # treat that alone as Claude host when any GROK_* already matched above.
+    printf '%s' "claude"
+    return
+  fi
+  if ancestor_is grok; then
+    printf '%s' "grok"
+    return
+  fi
+  if ancestor_is claude; then
+    printf '%s' "claude"
+    return
+  fi
+  printf '%s' ""
+}
+
+HOST="$(detect_host)"
+debug "start client=$CLIENT host=${HOST:-none} ppid=$PPID grok_agent=${GROK_AGENT:-} grok_hook=${GROK_HOOK_EVENT:-} cwd=$PWD"
+
+# If the hook argument disagrees with the real host, trust the host.
+# Example: Grok with compat.claude.hooks=true runs "agent-ding claude" → remap to grok.
+# Same group key for grok (below) collapses double-fire (claude hook + grok Stop) into one toast.
+if [ "$HOST" = "grok" ]; then
+  case "$CLIENT" in
+    claude|claude-code|cc|agent|"")
+      debug "remap $CLIENT → grok (host=grok)"
+      CLIENT=grok
+      CLIENT_RAW=grok
+      ;;
+  esac
+elif [ "$HOST" = "claude" ]; then
+  case "$CLIENT" in
+    grok|grok-build|xai)
+      debug "remap $CLIENT → claude (host=claude)"
+      CLIENT=claude
+      CLIENT_RAW=claude
+      ;;
+  esac
 fi
 
 case "$CLIENT" in
@@ -74,7 +119,8 @@ PROJECT="$(basename "${PWD:-$HOME}")"
 [ "$PROJECT" = "/" ] && PROJECT="Home"
 PROJECT_HASH="$(printf '%s' "${PWD:-}" | shasum -a 1 2>/dev/null | awk '{print $1}' | cut -c1-10)"
 [ -z "$PROJECT_HASH" ] && PROJECT_HASH="default"
-GROUP="agent-ding:${CLIENT}:${PROJECT_HASH}"
+# Group by project only (not client) so a remapped + native double-fire collapses.
+GROUP="agent-ding:done:${PROJECT_HASH}"
 
 if [ -n "$CUSTOM_MSG" ]; then
   DETAIL="$(printf '%s' "$CUSTOM_MSG" | tr '\n' ' ' | sed 's/  */ /g; s/^[[:space:]]*//; s/[[:space:]]*$//')"
@@ -107,16 +153,19 @@ if [ -n "$CLIENT" ] && [ -f "$ICON_DIR/${CLIENT}.png" ]; then
   ICON_FILE="$ICON_DIR/${CLIENT}.png"
 fi
 
+debug "notify title=$TITLE app=$APP_NAME sender=$SENDER_ID notifier=$NOTIFIER body=$BODY"
+
 if [ -n "$NOTIFIER" ]; then
   ARGS=(-title "$TITLE" -message "$BODY" -sound "$SOUND" -group "$GROUP")
   [ -n "$BUNDLE_ID" ] && ARGS+=(-activate "$BUNDLE_ID")
-  # Critical for left icon on modern macOS: -sender must match brand app bundle id
+  # Left icon = brand .app via -sender (must match CFBundleIdentifier).
   if [ -n "$SENDER_ID" ]; then
     ARGS+=(-sender "$SENDER_ID")
   fi
-  if [ -n "$ICON_FILE" ]; then
-    # file URL for appIcon (best-effort; -sender is primary)
-    ARGS+=(-appIcon "file://${ICON_FILE}" -contentImage "file://${ICON_FILE}")
+  # Do NOT pass -contentImage: modern macOS draws a second large thumbnail
+  # on the RIGHT (duplicate / weird app tile). -appIcon only as no-sender fallback.
+  if [ -n "$ICON_FILE" ] && [ -z "$SENDER_ID" ]; then
+    ARGS+=(-appIcon "file://${ICON_FILE}")
   fi
   "$NOTIFIER" "${ARGS[@]}" >/dev/null 2>&1 || true
 elif command -v notify-send >/dev/null 2>&1; then
