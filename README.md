@@ -75,6 +75,9 @@ State: `~/.local/share/agent-ding/install-state.json` → used by uninstall.
 
 ## Hooks (done-only)
 
+> **Grok users:** Grok can load Claude's hooks (`compat.claude.hooks`). `agent-ding claude` auto-skips when the host is Grok so you don't get a Claude-branded ding. Keep a separate Grok `turn_complete` hook → `agent-ding grok`.
+
+
 Prefer **absolute path** (agent hook PATH often lacks `~/.local/bin`):
 
 ```json

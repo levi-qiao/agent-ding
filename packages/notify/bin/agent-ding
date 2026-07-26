@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agent-ding — desktop "done" toast for coding agents (turn complete only).
-# English-only messages. Two lines: title + body. Branded .app icon on macOS.
+# English-only. Two lines: title + body. Brand icon via dedicated .app + -sender.
 #
 # Usage: agent-ding <client> [message]
 # Clients: claude | grok | agy | codex | <custom>
@@ -12,24 +12,62 @@ CUSTOM_MSG="${*:-}"
 CLIENT="$(printf '%s' "$CLIENT_RAW" | tr '[:upper:]' '[:lower:]')"
 
 APP_ROOT="${AGENT_DING_APP_DIR:-$HOME/.local/share/agent-ding/apps}"
+ICON_DIR="${AGENT_DING_ICON_DIR:-$HOME/.local/share/agent-ding/icons}"
 MSG_DONE="${AGENT_DING_MSG_DONE:-Done}"
+
+# Grok Build imports ~/.claude/settings.json hooks when compat.claude.hooks=true.
+# That would fire "agent-ding claude" on Grok turns — skip wrong brand.
+is_grok_host() {
+  [ -n "${GROK_SESSION_ID:-}" ] && return 0
+  [ -n "${GROK_SESSION:-}" ] && return 0
+  [ -n "${GROK_HOOK_EVENT:-}" ] && return 0
+  [ -n "${GROK_HOME:-}" ] && return 0
+  # Parent process heuristic (hook subprocess)
+  local p comm
+  p="${PPID:-0}"
+  comm="$(ps -p "$p" -o comm= 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+  case "$comm" in
+    *grok*) return 0 ;;
+  esac
+  # Walk one more level
+  local pp
+  pp="$(ps -p "$p" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+  if [ -n "$pp" ] && [ "$pp" != "0" ]; then
+    comm="$(ps -p "$pp" -o comm= 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+    case "$comm" in
+      *grok*) return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+if [ "$CLIENT" = "claude" ] || [ "$CLIENT" = "claude-code" ] || [ "$CLIENT" = "cc" ]; then
+  if is_grok_host; then
+    # Wrong brand would show; Grok has its own turn_complete → agent-ding grok
+    exit 0
+  fi
+fi
 
 case "$CLIENT" in
   claude|claude-code|cc)
     CLIENT=claude; TITLE="Claude Code"; APP_NAME="Claude"
+    SENDER_ID="local.agentding.claude"
     SOUND="${AGENT_DING_SOUND:-Glass}" ;;
   grok|grok-build|xai)
     CLIENT=grok; TITLE="Grok"; APP_NAME="Grok"
+    SENDER_ID="local.agentding.grok"
     SOUND="${AGENT_DING_SOUND:-Hero}" ;;
   agy|antigravity|gemini)
     CLIENT=agy; TITLE="Agy"; APP_NAME="Agy"
+    SENDER_ID="local.agentding.agy"
     SOUND="${AGENT_DING_SOUND:-Purr}" ;;
   codex)
     CLIENT=codex; TITLE="Codex"; APP_NAME="Codex"
+    SENDER_ID="local.agentding.codex"
     SOUND="${AGENT_DING_SOUND:-Submarine}" ;;
   *)
     TITLE="$(printf '%s' "$CLIENT_RAW" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
-    APP_NAME=""; SOUND="${AGENT_DING_SOUND:-Glass}" ;;
+    APP_NAME=""; SENDER_ID=""; SOUND="${AGENT_DING_SOUND:-Glass}" ;;
 esac
 
 PROJECT="$(basename "${PWD:-$HOME}")"
@@ -64,9 +102,22 @@ elif command -v terminal-notifier >/dev/null 2>&1; then
   NOTIFIER="$(command -v terminal-notifier)"
 fi
 
+ICON_FILE=""
+if [ -n "$CLIENT" ] && [ -f "$ICON_DIR/${CLIENT}.png" ]; then
+  ICON_FILE="$ICON_DIR/${CLIENT}.png"
+fi
+
 if [ -n "$NOTIFIER" ]; then
   ARGS=(-title "$TITLE" -message "$BODY" -sound "$SOUND" -group "$GROUP")
   [ -n "$BUNDLE_ID" ] && ARGS+=(-activate "$BUNDLE_ID")
+  # Critical for left icon on modern macOS: -sender must match brand app bundle id
+  if [ -n "$SENDER_ID" ]; then
+    ARGS+=(-sender "$SENDER_ID")
+  fi
+  if [ -n "$ICON_FILE" ]; then
+    # file URL for appIcon (best-effort; -sender is primary)
+    ARGS+=(-appIcon "file://${ICON_FILE}" -contentImage "file://${ICON_FILE}")
+  fi
   "$NOTIFIER" "${ARGS[@]}" >/dev/null 2>&1 || true
 elif command -v notify-send >/dev/null 2>&1; then
   notify-send "$TITLE" "$BODY" 2>/dev/null || true

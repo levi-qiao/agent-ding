@@ -176,3 +176,17 @@ If no toast on macOS: System Settings → Notifications → allow the brand apps
 
 - Exact click → Zellij pane focus  
 - Permission/idle notifications by default  
+
+## Grok + Claude hook compatibility
+
+Grok sets `[compat.claude] hooks = true` by default and **loads `~/.claude/settings.json` hooks**.
+
+If Claude has `Stop → agent-ding claude`, Grok turns would incorrectly ding as Claude Code.
+
+**agent-ding mitigates this:** when `client=claude` but the host looks like Grok (`GROK_*` env / parent process), it **no-ops**. Grok should still have its own:
+
+```toml
+command = "/ABS/PATH/agent-ding grok \"$GROK_MESSAGE\""
+```
+
+Do not remove `compat.claude.hooks` solely for this unless the owner wants that — they may rely on Claude PreToolUse hooks (e.g. rtk) inside Grok.
