@@ -1,5 +1,9 @@
 // agents: Grok / Claude / Agy | shell: cmd + logs
 // command pane: exit stays held; Enter re-runs
+//
+// Image paste (Cmd+V into Claude): start with `ai` helper (default-mode locked)
+// or press Ctrl+g to enter locked mode so keystrokes reach the agent.
+// Zellij normal mode intercepts many keys and can break clipboard image paste.
 layout {
     tab name="agents" focus=true {
         pane split_direction="vertical" {

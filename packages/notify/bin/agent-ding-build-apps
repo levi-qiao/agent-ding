@@ -17,6 +17,8 @@ if [ -z "$SRC" ] || [ ! -d "$SRC" ]; then
   exit 1
 fi
 
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
 png_to_icns() {
   local png="$1" icns="$2" tmp is s
   tmp="$(mktemp -d)"
@@ -37,6 +39,7 @@ build_app() {
   rm -rf "$dest"
   cp -R "$SRC" "$dest"
   png_to_icns "$png" "$dest/Contents/Resources/AppIcon.icns"
+  # Drop stock Terminal icon so NC cannot fall back to a blank/wrong tile
   rm -f "$dest/Contents/Resources/Terminal.icns" 2>/dev/null || true
   plist="$dest/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier local.agentding.$id" "$plist" 2>/dev/null \
@@ -49,8 +52,16 @@ build_app() {
     || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist"
   /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$plist" 2>/dev/null \
     || /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$plist"
+  # Relax min OS if brew stamped a future-only value (still runs on current macOS)
+  /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 13.0" "$plist" 2>/dev/null || true
   xattr -cr "$dest" 2>/dev/null || true
-  echo "built $dest"
+  # Critical: after mutating Info.plist + icns, re-sign so LaunchServices binds
+  # the identifier + icon. Without this, NC shows a blank white tile.
+  codesign --force --deep --sign - "$dest" >/dev/null 2>&1 || true
+  if [ -x "$LSREGISTER" ]; then
+    "$LSREGISTER" -f "$dest" >/dev/null 2>&1 || true
+  fi
+  echo "built $dest (signed + registered)"
 }
 
 build_app claude Claude "$ICON_DIR/claude.png"

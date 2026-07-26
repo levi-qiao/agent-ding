@@ -97,7 +97,12 @@ case "$CLIENT" in
   claude|claude-code|cc)
     CLIENT=claude; TITLE="Claude Code"; APP_NAME="Claude"
     SENDER_ID="local.agentding.claude"
-    SOUND="${AGENT_DING_SOUND:-Glass}" ;;
+    SOUND="${AGENT_DING_SOUND:-Glass}"
+    # Prefer official Claude Desktop icon when installed (NC always has it cached).
+    if [ -d "/Applications/Claude.app" ]; then
+      SENDER_ID="com.anthropic.claudefordesktop"
+    fi
+    ;;
   grok|grok-build|xai)
     CLIENT=grok; TITLE="Grok"; APP_NAME="Grok"
     SENDER_ID="local.agentding.grok"
@@ -109,7 +114,13 @@ case "$CLIENT" in
   codex)
     CLIENT=codex; TITLE="Codex"; APP_NAME="Codex"
     SENDER_ID="local.agentding.codex"
-    SOUND="${AGENT_DING_SOUND:-Submarine}" ;;
+    SOUND="${AGENT_DING_SOUND:-Submarine}"
+    if [ -d "/Applications/ChatGPT.app" ]; then
+      SENDER_ID="com.openai.chat"
+    elif [ -d "/Applications/Codex.app" ]; then
+      SENDER_ID="com.openai.codex"
+    fi
+    ;;
   *)
     TITLE="$(printf '%s' "$CLIENT_RAW" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
     APP_NAME=""; SENDER_ID=""; SOUND="${AGENT_DING_SOUND:-Glass}" ;;

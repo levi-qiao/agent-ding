@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] — 2026-07-26
+
+### Fixed
+
+- **Blank white toast icon:** re-`codesign` + `lsregister` branded `.app`s after mutating Info.plist/icns (LaunchServices was unbound → white tile). Claude also prefers official `com.anthropic.claudefordesktop` as `-sender` when Claude Desktop is installed.
+- **Zellij `ai` image paste:** start workspaces in **locked** mode (`--default-mode locked`) so Cmd+V reaches Claude; tip to press Ctrl+g on existing sessions.
+
 ## [0.1.2] — 2026-07-26
 
 ### Fixed

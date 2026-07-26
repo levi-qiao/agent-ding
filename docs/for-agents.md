@@ -184,7 +184,8 @@ If no toast on macOS: System Settings → Notifications → allow the brand apps
 | `agent-ding: command not found` in hook | Use full path in hook command |
 | Grok turn ends, no ding | Prefer `~/.grok/hooks/agent-ding.json` **Stop** (not only `ui.notifications`). Restart Grok after install. Avoid `method = "none"` |
 | Grok dings as Claude Code | Fixed in ≥0.1.2: host remap (`GROK_AGENT` / hook env / PPID). Ensure `~/.grok/hooks/agent-ding.json` Stop → `agent-ding grok`. Prefer `compat.claude.hooks = false` |
-| Icons look like Terminal | Run `agent-ding-icons && agent-ding-build-apps` on macOS |
+| Icons look like Terminal / blank white | Run `agent-ding-icons && agent-ding-build-apps` (must **codesign** + lsregister). Claude uses Claude Desktop `-sender` when installed |
+| Claude Cmd+V image paste fails in Zellij `ai` | Workspace must be **locked** (`ai` helper uses `--default-mode locked`). On existing session press **Ctrl+g**. |
 | Layout not applied | New Zellij session after copying layouts; or DIY |
 | Uninstall left stuff | Was installed without `./install.sh` — use `--purge` + manual hook edit |
 
